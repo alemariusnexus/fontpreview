@@ -3,16 +3,25 @@
 
 #include <QMainWindow>
 #include <QListWidget>
+#include <QList>
 #include <ui_MainWindow.h>
 
 class MainWindow : public QMainWindow
 {
 	Q_OBJECT
 
+private:
+	struct LoadedFontFile
+	{
+		QString fontFile;
+		QStringList fontFamilies;
+	};
+
 public:
 	MainWindow();
 
 	void openFontFile(QString fontFile);
+	void openFontFiles(QStringList fontFiles);
 	void useFontFamily(const QString& family);
 
 protected:
@@ -37,7 +46,10 @@ private slots:
 	void fontStyleListItemChanged(QListWidgetItem* cur, QListWidgetItem* prev);
 	void fontSizeListItemChanged(QListWidgetItem* cur, QListWidgetItem* prev);
 
+	void loadedFontDetailsEditAnchorClicked(const QUrl& link);
+
 	void mainSplitterMoved();
+	void fontSplitterMoved();
 
 private:
 	void updateAvailableFonts(const QString& selectedFamily = QString());
@@ -52,6 +64,8 @@ private:
 
 	void updateWindowTitle();
 
+	void updateLoadedFontDetails();
+
 private:
 	Ui_MainWindow ui;
 
@@ -60,6 +74,7 @@ private:
 	bool unsavedPreviewTextChanges;
 
 	QStringList customFontFamilies;
+	QList<LoadedFontFile> loadedFontFiles;
 };
 
 #endif /* FONTPREVIEW_MAINWINDOW_H_ */

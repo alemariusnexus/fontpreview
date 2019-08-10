@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QTimer>
 #include <QDir>
+#include <QUrl>
 #include <cstdio>
 
 
@@ -32,10 +33,12 @@ MainWindow::MainWindow()
 	connect(ui.fontFamilyList, SIGNAL(currentItemChanged(QListWidgetItem*, QListWidgetItem*)), this, SLOT(fontFamilyListItemChanged(QListWidgetItem*, QListWidgetItem*)));
 	connect(ui.fontStyleList, SIGNAL(currentItemChanged(QListWidgetItem*, QListWidgetItem*)), this, SLOT(fontStyleListItemChanged(QListWidgetItem*, QListWidgetItem*)));
 	connect(ui.fontSizeList, SIGNAL(currentItemChanged(QListWidgetItem*, QListWidgetItem*)), this, SLOT(fontSizeListItemChanged(QListWidgetItem*, QListWidgetItem*)));
+	connect(ui.loadedFontDetailsEdit, SIGNAL(anchorClicked(const QUrl&)), this, SLOT(loadedFontDetailsEditAnchorClicked(const QUrl&)));
 
 	connect(ui.quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
 
 	connect(ui.mainSplitter, SIGNAL(splitterMoved(int, int)), this, SLOT(mainSplitterMoved()));
+	connect(ui.fontSplitter, SIGNAL(splitterMoved(int, int)), this, SLOT(fontSplitterMoved()));
 
 
 	ui.previewTextTemplateNewButton->setIcon(QIcon::fromTheme("list-add", QIcon(":/fontpreview/resources/list-add.png")));
@@ -74,6 +77,8 @@ MainWindow::MainWindow()
 
 	setWindowIcon(QIcon(":/fontpreview/resources/app-icon.png"));
 	updateWindowTitle();
+
+	updateLoadedFontDetails();
 }
 
 
@@ -87,6 +92,10 @@ void MainWindow::loadGeometryFromSettings()
 
 	if (settings.contains("state/mainSplitterState")) {
 		ui.mainSplitter->restoreState(settings.value("state/mainSplitterState").toByteArray());
+	}
+
+	if (settings.contains("state/fontSplitterState")) {
+		ui.fontSplitter->restoreState(settings.value("state/fontSplitterState").toByteArray());
 	}
 }
 
@@ -103,27 +112,46 @@ void MainWindow::closeEvent(QCloseEvent* evt)
 
 void MainWindow::openFontFile(QString fontFile)
 {
-	int fontId = QFontDatabase::addApplicationFont(fontFile);
+	QStringList fontFiles;
+	fontFiles.append(fontFile);
+	openFontFiles(fontFiles);
+}
 
-	if (fontId == -1) {
-		QMessageBox::critical(this, "Failed To Open Font File", QString("Failed to open font file:\n\n%s").arg(fontFile));
-		return;
+
+void MainWindow::openFontFiles(QStringList fontFiles)
+{
+	QString chosenFamily;
+
+	for (QString fontFile : fontFiles) {
+		int fontId = QFontDatabase::addApplicationFont(fontFile);
+
+		if (fontId == -1) {
+			QMessageBox::critical(this, "Failed To Open Font File", QString("Failed to open font file:\n\n%1").arg(fontFile));
+			return;
+		}
+
+		QStringList families = QFontDatabase::applicationFontFamilies(fontId);
+
+		if (families.empty()) {
+			QMessageBox::warning(this, "Empty Font File", "Font file contains no font families!");
+			return;
+		}
+
+		for (QString fam : families) {
+			customFontFamilies.append(fam);
+		}
+
+		chosenFamily = families[0];
+
+		LoadedFontFile lff;
+		lff.fontFile = fontFile;
+		lff.fontFamilies = families;
+		loadedFontFiles.append(lff);
 	}
 
-	QStringList families = QFontDatabase::applicationFontFamilies(fontId);
+	updateAvailableFonts(chosenFamily);
 
-	if (families.empty()) {
-		QMessageBox::warning(this, "Empty Font File", "Font file contains no font families!");
-		return;
-	}
-
-	for (QString fam : families) {
-		customFontFamilies.append(fam);
-	}
-
-	QString family = families[0];
-
-	updateAvailableFonts(family);
+	updateLoadedFontDetails();
 }
 
 
@@ -239,15 +267,17 @@ void MainWindow::fontOpenButtonClicked()
 	QSettings settings;
 
 	QString cdir = settings.value("state/fontOpenDialogLastDir").toString();
-	QString fontFile = QFileDialog::getOpenFileName(this, "Open Font File", cdir, "Font Files (*.ttf *.ttc *.otf *.otc)");
+	QStringList fontFiles = QFileDialog::getOpenFileNames(this, "Open Font File", cdir, "Font Files (*.ttf *.ttc *.otf *.otc)");
 
-	if (fontFile.isNull()) {
+	if (fontFiles.isEmpty()) {
 		return;
 	}
 
-	settings.setValue("state/fontOpenDialogLastDir", QFileInfo(fontFile).absoluteDir().absolutePath());
+	settings.setValue("state/fontOpenDialogLastDir", QFileInfo(fontFiles[0]).absoluteDir().absolutePath());
 
-	openFontFile(fontFile);
+	for (QString fontFile : fontFiles) {
+		openFontFile(fontFile);
+	}
 }
 
 
@@ -496,6 +526,14 @@ void MainWindow::mainSplitterMoved()
 }
 
 
+void MainWindow::fontSplitterMoved()
+{
+	QSettings settings;
+
+	settings.setValue("state/fontSplitterState", ui.fontSplitter->saveState());
+}
+
+
 void MainWindow::updateWindowTitle()
 {
 	QString family;
@@ -513,6 +551,49 @@ void MainWindow::updateWindowTitle()
 	}
 
 	setWindowTitle(title);
+}
+
+
+void MainWindow::updateLoadedFontDetails()
+{
+	QString details;
+
+	bool first = true;
+
+	for (const LoadedFontFile& lff : loadedFontFiles) {
+		QString fileName = QFileInfo(lff.fontFile).fileName();
+
+		if (!first) {
+			details.append("<br/>\n");
+		}
+
+		details.append(QString("<div style=\"font-weight: bold;\">%1</div>").arg(fileName));
+
+		for (QString fam : lff.fontFamilies) {
+			details.append(QString("<div style=\"text-indent: 20px;\"><a href=\"%2\">%1</a></div>").arg(fam).arg(fam));
+		}
+
+		first = false;
+	}
+
+	ui.loadedFontDetailsEdit->setHtml(details);
+}
+
+
+void MainWindow::loadedFontDetailsEditAnchorClicked(const QUrl& link)
+{
+	QString family = link.toString();
+
+	for (int i = 0 ; i < ui.fontFamilyList->count() ; i++) {
+		QListWidgetItem* item = ui.fontFamilyList->item(i);
+		QString ifam = item->data(Qt::UserRole).toString();
+
+		if (ifam == family) {
+			ui.fontFamilyList->setCurrentItem(item);
+			ui.fontFamilyList->scrollToItem(item);
+			break;
+		}
+	}
 }
 
 
