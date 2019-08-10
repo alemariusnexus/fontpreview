@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/">
+        <file>fontpreview/resources/app-icon.png</file>
+        <file>fontpreview/resources/document-save.png</file>
+        <file>fontpreview/resources/list-add.png</file>
+        <file>fontpreview/resources/list-remove.png</file>
+    </qresource>
+</RCC>

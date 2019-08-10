@@ -1,0 +1,3 @@
+ADD_SOURCES(main.cpp MainWindow.cpp)
+ADD_SOURCES(OUTVAR MOC_SRCS MainWindow.h)
+ADD_SOURCES(OUTVAR UIC_SRCS MainWindow.ui)
